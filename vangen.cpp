@@ -32,6 +32,7 @@ using namespace std;
 #include <openssl/bn.h>
 #include <openssl/rand.h>
 
+
 extern "C"
 {
   #include "pattern.h"
@@ -41,6 +42,7 @@ extern "C"
 
 const char *version = VANITYGEN_VERSION;
 #define DATE "June 06, 2016"
+#define BN_MASK2 (0xffffffffffffffffUL)
 
 string CName;
 string CString;
@@ -56,7 +58,8 @@ vg_thread_loop(void *arg)
 	unsigned char *eckey_buf;
 	unsigned char hash1[32];
 
-	int i, c, len, output_interval;
+	size_t i;
+    int c, len, output_interval;
 	int hash_len;
 
 	const BN_ULONG rekey_max = 10000000;
@@ -99,8 +102,8 @@ vg_thread_loop(void *arg)
 		exit(1);
 	}
 
-	BN_set_word(&vxcp->vxc_bntmp, ptarraysize);
-	EC_POINT_mul(pgroup, pbatchinc, &vxcp->vxc_bntmp, NULL, NULL,
+	BN_set_word(vxcp->vxc_bntmp, ptarraysize);
+	EC_POINT_mul(pgroup, pbatchinc, vxcp->vxc_bntmp, NULL, NULL,
 		     vxcp->vxc_bnctx);
 	EC_POINT_make_affine(pgroup, pbatchinc, vxcp->vxc_bnctx);
 
@@ -135,12 +138,12 @@ vg_thread_loop(void *arg)
 			npoints = 0;
 
 			/* Determine rekey interval */
-			EC_GROUP_get_order(pgroup, &vxcp->vxc_bntmp,
+			EC_GROUP_get_order(pgroup, vxcp->vxc_bntmp,
 					   vxcp->vxc_bnctx);
-			BN_sub(&vxcp->vxc_bntmp2,
-			       &vxcp->vxc_bntmp,
+			BN_sub(vxcp->vxc_bntmp2,
+			       vxcp->vxc_bntmp,
 			       EC_KEY_get0_private_key(pkey));
-			rekey_at = BN_get_word(&vxcp->vxc_bntmp2);
+			rekey_at = BN_get_word(vxcp->vxc_bntmp2);
 			if ((rekey_at == BN_MASK2) || (rekey_at > rekey_max))
 				rekey_at = rekey_max;
 			assert(rekey_at > 0);
@@ -379,7 +382,7 @@ int main(int argc, char **argv)
 	char pwbuf[128];
 	const char *result_file = NULL;
 	const char *key_password = NULL;
-	char **patterns;
+	char **patterns=NULL;
 	int npatterns = 0;
 	int nthreads = 0;
 	vg_context_t *vcp = NULL;
@@ -388,7 +391,7 @@ int main(int argc, char **argv)
 	FILE *pattfp[MAX_FILE], *fp;
 	int pattfpi[MAX_FILE];
 	int npattfp = 0;
-	int pattstdin = 0;
+//	int pattstdin = 0;
 
 	int i;
 //**************************************************
@@ -483,10 +486,13 @@ int main(int argc, char **argv)
     CString=argv[2];
     CString=Cchar+CString;
     printf(" - search pattern set to %s length %i.\n",CString.c_str(),len);
-char *temp=(char*)CString.c_str();
-patterns=&temp;
-npatterns=1;
-
+    patterns = (char **)malloc(sizeof(char *));
+    if (patterns != NULL)
+    {
+      // strdup duplicates the CString internal array onto the heap permanently
+      patterns[0] = strdup(CString.c_str());
+    }
+    npatterns=1;
   }
 
 /*
@@ -770,5 +776,11 @@ npatterns=1;
 
 	if (!start_threads(vcp, nthreads))
 		return 1;
-	return 0;
+
+  if (patterns)
+  {
+    free(patterns[0]);
+    free(patterns);
+   }
+    return 0;
 }

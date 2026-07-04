@@ -37,6 +37,10 @@
 
 #define VANITYGEN_VERSION "0.22"
 
+// Automatically checks for NULL, frees the big number, and zeros the pointer
+#define SAFE_BN_free(p) do{if((p) != NULL) { BN_free(p); (p) = NULL;} } while(0)
+
+
 typedef struct _vg_context_s vg_context_t;
 
 struct _vg_exec_context_s;
@@ -51,10 +55,10 @@ struct _vg_exec_context_s {
 	EC_KEY				*vxc_key;
 	int				vxc_delta;
 	unsigned char			vxc_binres[28];
-	BIGNUM				vxc_bntarg;
-	BIGNUM				vxc_bnbase;
-	BIGNUM				vxc_bntmp;
-	BIGNUM				vxc_bntmp2;
+	BIGNUM				*vxc_bntarg;
+	BIGNUM				*vxc_bnbase;
+	BIGNUM				*vxc_bntmp;
+	BIGNUM				*vxc_bntmp2;
 
 	vg_exec_context_threadfunc_t	vxc_threadfunc;
 	pthread_t			vxc_pthread;
